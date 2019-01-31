@@ -138,6 +138,60 @@ module Selection
      rows_to_array(rows)
   end
 
+  def where(*args)
+    # 1) Handle array conditions
+    # e.g. Entry.where("phone_number = ?", params[:phone_number])
+    if args.count > 1
+      expression = args.shift # removes the first element and returns it
+      params = args
+    else
+      case args.first
+        # 2)Handle string conditions
+        #e.g Entry.where(name: 'Blochead', age: 30
+      when Hash
+        expression_hash = BlocRecord::Utility.convert_keus(args.first)
+        expression = expression_hash.map{|key, value| "#{key}=#{BlocRecord::Utility.sql_strings(value)}".join("and")}
+      end
+    end
+
+    sql = <<-SQL
+      SELECT #{columns.join(',')} FROM #{table}
+      WHERE #{expression};
+    SQL
+
+    #params are passed in to connection.execute(), which handles "?" replacement
+
+    rows = connection.execute(sql, params)
+    rows_to_array(rows)
+  end
+
+  def joins(*args)
+    # 3) .join Multiple Association with Symbols
+    #if more than one element is passed in, our query JOINS on multiple associations.
+    if args.count > 1
+      joins = args.map {|arg| "INNER JOIN #{arg} ON {arg}.#{table}_id"}.join(" ")
+      rows = connection.execute <<-SQL
+        SELECT * FROM #{table}
+        #joins
+      SQL
+    else
+      case args.first
+      when string
+        #1) .join with String SQL 
+        # BlocRecord users pass in a handwritten JOIN statement like:
+        #e.g. Employee.join(:Departement) results in the query
+        # SELECT * FROM employee JOIN deparment ON department.employee_id = employee.id;
+        # But this way should follow standard naming conventions.
+
+        rows = connection.execute <<-SQL
+          SELECT * FROM #{table}
+          INNER JOIN #{args.first} ON  #{args.first}.#{table}_id = #{table}.id
+        SQL
+      end
+    end
+    rows_to_array
+  end
+
    private
   def init_object_from_row(row)
     if row
