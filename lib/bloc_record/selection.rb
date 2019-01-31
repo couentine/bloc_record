@@ -139,6 +139,7 @@ module Selection
   end
 
   def where(*args)
+    return self if args == []
     # 1) Handle array conditions
     # e.g. Entry.where("phone_number = ?", params[:phone_number])
     if args.count > 1
@@ -165,7 +166,36 @@ module Selection
     rows_to_array(rows)
   end
 
-  def joins(*args)
+
+  def inner_where(query, str)
+    sql = <<-SQL
+      SELECT * FROM #{table}
+      #{query}
+      WHERE #{str};
+    SQL
+    rows = connection.execute(sql)
+  end
+
+
+   def not(hash)
+    str_condition = hash.map {|k,v| "#{k} != '#{v}'"}.join(" AND ")
+    where(str_condition)
+  end
+
+  def order(*args)
+    orders = {}
+    for arg in args
+      case arg
+      when String
+        orders.merge!(string_order(arg)) # merge: a way to combine hashes.
+      when Symbol
+        orders[arg] = nil
+      when Hash
+        orders.merge!(arg)
+      end
+    end
+
+  def join(*args)
     # 3) .join Multiple Association with Symbols
     #if more than one element is passed in, our query JOINS on multiple associations.
     if args.count > 1
@@ -192,6 +222,23 @@ module Selection
     rows_to_array
   end
 
+  def joins(hash)
+    join_1 = hash.keys[0]
+    join_2 = hash.values[0]
+
+    joins = "INNER JOIN #{join_1} ON #{join_1}.#{table}_id = #{table}.id " +
+            "INNER JOIN #{join_2} ON #{join_2}.#{join_1}_id = #{join_1}.id"
+
+    rows = connection.execute <<-SQL
+      SELECT * FROM #{table}
+      #{joins}
+    SQL
+    
+    arr = rows_to_array(rows)
+    arr.unshift(joins)  # To save the JOIN query
+    arr
+  end
+
    private
   def init_object_from_row(row)
     if row
@@ -207,5 +254,37 @@ module Selection
    def flashError
     puts "Error: Invalid Input"
     return false
+  end
+
+    def string_order(str)
+    orders = {}
+    conditions = str.split(',')
+    if conditions.count > 1  # multiple conditions
+      for condition in conditions
+        orders.merge!(divide_string(condition))
+      end
+    else # single condition
+      condition = conditions[0]
+      orders.merge!(divide_string(condition))
+    end
+    orders
+  end
+
+  # This method takes a single condition in string and returns a hash of a single condition.
+  def divide_string(s)
+    orders = {}
+    str = s.downcase  # To change "ASC" to "asc", "DESC" to "desc"
+    if str.include?(" asc") || str.include?(" desc")  # Note: a space before asc/desc
+      pair = str.split(' ')  # pair = ["name", "asc"]
+      orders[pair[0]] = pair[-1]
+    else
+      orders[str] = nil
+    end
+    orders
+  end
+
+  # This method changes a hash in a string format.
+  def hash_to_str(hash)
+    hash.map {|key, val| "#{key} #{val}"}.join(", ")
   end
 end
