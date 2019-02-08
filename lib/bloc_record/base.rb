@@ -5,6 +5,7 @@ require 'bloc_record/selection'
 require 'bloc_record/connection'
 require 'bloc_record/array'
 require 'bloc_record/collection'
+require 'bloc_record/associations'
  
 module BlocRecord
   class Base
@@ -12,6 +13,7 @@ module BlocRecord
     extend Selection
     extend Schema
     extend Connection
+    extend Associations
 
     def initialize(option={})
       options = BlocRecord::utility.convert_keys(options)
