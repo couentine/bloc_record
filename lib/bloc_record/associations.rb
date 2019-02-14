@@ -39,7 +39,7 @@ module Associations
 		end
 	end
 
-	ef has_one(association)
+	def has_one(association)
     define_method(association) do
       row = self.class.connection.execute <<-SQL
         SELECT * FROM #{association.to_s.singularize}
